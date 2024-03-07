@@ -1,0 +1,86 @@
+
+// Breakouts Master MT5
+// Developer's site: forexroboteasy.com
+// Developed by: Forex Robot Easy Team
+
+// Include necessary libraries
+#include <Trade\Trade.mqh>
+
+// Define constants
+#define ENTRY_BUFFER 10 // Buffer for entry signals
+#define EXIT_BUFFER 5 // Buffer for exit signals
+#define RISK_PERCENTAGE 2 // Risk percentage for position sizing
+#define STOP_LOSS_FACTOR 1 // Stop-loss factor for risk-reward ratio
+
+// Create an instance of the Trade class
+CTrade trade;
+
+// Initialize the expert advisor
+int OnInit()
+{
+   // Enable trade execution
+   trade.SetExpertMagicNumber(123456); // Set expert magic number
+
+   return(INIT_SUCCEEDED);
+}
+
+// Handle the tick event
+void OnTick()
+{
+   // Check if the current price is above the previous high
+   if (High[1] + ENTRY_BUFFER < High[0])
+   {
+      // Generate buy entry signal
+      double entryPrice = High[0] + ENTRY_BUFFER;
+      double stopLoss = entryPrice - (ENTRY_BUFFER * STOP_LOSS_FACTOR);
+      double takeProfit = entryPrice + (ENTRY_BUFFER * STOP_LOSS_FACTOR);
+      double lotSize = AccountBalance() * (RISK_PERCENTAGE / 100);
+
+      // Place the buy order
+      trade.Buy(lotSize, entryPrice, stopLoss, takeProfit);
+   }
+   // Check if the current price is below the previous low
+   else if (Low[1] - ENTRY_BUFFER > Low[0])
+   {
+      // Generate sell entry signal
+      double entryPrice = Low[0] - ENTRY_BUFFER;
+      double stopLoss = entryPrice + (ENTRY_BUFFER * STOP_LOSS_FACTOR);
+      double takeProfit = entryPrice - (ENTRY_BUFFER * STOP_LOSS_FACTOR);
+      double lotSize = AccountBalance() * (RISK_PERCENTAGE / 100);
+
+      // Place the sell order
+      trade.Sell(lotSize, entryPrice, stopLoss, takeProfit);
+   }
+
+   // Check if any open trades need to be managed
+   for (int i = 0; i < trade.PositionTotal(); i++)
+   {
+      // Get the current trade
+      CTradePosition position;
+      trade.PositionGetByIndex(i, position);
+
+      // Check if the trade has reached the take-profit level
+      if (position.PositionType() == POSITION_TYPE_BUY && position.PositionStopLimit() >= position.PositionPrice())
+      {
+         // Close the buy trade with a partial profit
+         double closePrice = position.PositionPrice() + (EXIT_BUFFER * STOP_LOSS_FACTOR);
+         trade.PositionClosePartial(position.PositionTicket(), position.PositionVolume() / 2, closePrice, 0);
+      }
+      else if (position.PositionType() == POSITION_TYPE_SELL && position.PositionStopLimit() <= position.PositionPrice())
+      {
+         // Close the sell trade with a partial profit
+         double closePrice = position.PositionPrice() - (EXIT_BUFFER * STOP_LOSS_FACTOR);
+         trade.PositionClosePartial(position.PositionTicket(), position.PositionVolume() / 2, closePrice, 0);
+      }
+   }
+}
+
+// Handle the deinitialization event
+void OnDeinit(const int reason)
+{
+   // Close all open trades
+   trade.PositionCloseAll();
+
+   // Print a message to the journal
+   Print('Expert advisor terminated.');
+}
